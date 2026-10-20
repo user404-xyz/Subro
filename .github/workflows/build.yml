@@ -65,8 +65,8 @@ jobs:
                   applicationId "com.subbro.translator"
                   minSdk 26
                   targetSdk 34
-                  versionCode 2
-                  versionName "1.1"
+                  versionCode 3
+                  versionName "1.2"
               }
 
               buildTypes {
@@ -87,6 +87,7 @@ jobs:
               implementation 'androidx.core:core-ktx:1.12.0'
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
+              implementation 'com.google.mlkit:text-recognition:16.0.0'
           }
           EOF
 
@@ -94,7 +95,7 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
               
               <application
                   android:allowBackup="true"
@@ -113,7 +114,7 @@ jobs:
                       android:name=".FloatingService"
                       android:enabled="true"
                       android:exported="false"
-                      android:foregroundServiceType="specialUse" />
+                      android:foregroundServiceType="mediaProjection" />
               </application>
           </manifest>
           EOF
@@ -124,6 +125,31 @@ jobs:
           </resources>
           EOF
 
+          cat << 'EOF' > app/src/main/res/drawable/bg_circle_bubble.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="oval">
+              <solid android:color="#7C4DFF" />
+              <stroke
+                  android:width="2dp"
+                  android:color="#FFFFFF" />
+              <size
+                  android:width="54dp"
+                  android:height="54dp" />
+          </shape>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/bg_subtitle_card.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <solid android:color="#E60D0D14" />
+              <corners android:radius="14dp" />
+              <stroke
+                  android:width="1.5dp"
+                  android:color="#7C4DFF" />
+          </shape>
+          EOF
+
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -131,79 +157,175 @@ jobs:
               android:layout_height="match_parent"
               android:orientation="vertical"
               android:gravity="center"
-              android:padding="24dp"
-              android:background="#0F0F14">
+              android:padding="26dp"
+              android:background="#0A0A0F">
 
               <TextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="SubBro Translator"
+                  android:text="🌐 SubBro"
                   android:textColor="#FFFFFF"
-                  android:textSize="28sp"
+                  android:textSize="32sp"
                   android:textStyle="bold" />
 
               <TextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:layout_marginTop="10dp"
-                  android:text="Live Screen &amp; Game Hinglish Translator"
-                  android:textColor="#9E9E9E"
+                  android:layout_marginTop="8dp"
+                  android:text="Offline Realtime Hinglish Translator"
+                  android:textColor="#8F8FA3"
                   android:textSize="14sp" />
 
               <Button
-                  android:id="@+id/btnStartOverlay"
+                  android:id="@+id/btnStartEngine"
                   android:layout_width="match_parent"
                   android:layout_height="56dp"
-                  android:layout_marginTop="40dp"
-                  android:text="Start Floating Translator"
+                  android:layout_marginTop="48dp"
+                  android:text="Start SubBro Bubble"
                   android:backgroundTint="#7C4DFF"
                   android:textColor="#FFFFFF"
+                  android:textSize="16sp"
+                  android:textStyle="bold" />
+
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:layout_marginTop="20dp"
+                  android:gravity="center"
+                  android:text="Tap bubble to translate screen.\nLong press bubble to close."
+                  android:textColor="#5C5C70"
+                  android:textSize="12sp" />
+          </LinearLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/layout_floating_bubble.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/bubble_container"
+              android:layout_width="54dp"
+              android:layout_height="54dp"
+              android:background="@drawable/bg_circle_bubble">
+
+              <TextView
+                  android:id="@+id/tvBubbleIcon"
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:gravity="center"
+                  android:text="🌐"
+                  android:textSize="22sp" />
+          </FrameLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/layout_subtitle_card.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/subtitle_container"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:orientation="vertical"
+              android:background="@drawable/bg_subtitle_card"
+              android:padding="16dp">
+
+              <TextView
+                  android:id="@+id/tvOriginalText"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:text="Detected Text..."
+                  android:textColor="#9E9EAF"
+                  android:textSize="12sp" />
+
+              <TextView
+                  android:id="@+id/tvHinglishText"
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:layout_marginTop="6dp"
+                  android:text="SubBro Translating..."
+                  android:textColor="#00E676"
                   android:textSize="16sp"
                   android:textStyle="bold" />
           </LinearLayout>
           EOF
 
-          cat << 'EOF' > app/src/main/res/layout/layout_floating_widget.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:id="@+id/root_floating_view"
-              android:layout_width="wrap_content"
-              android:layout_height="wrap_content">
+          cat << 'EOF' > app/src/main/java/com/subbro/translator/HinglishEngine.kt
+          package com.subbro.translator
 
-              <LinearLayout
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:background="#E61A1A24"
-                  android:padding="10dp"
-                  android:gravity="center"
-                  android:orientation="horizontal">
+          import java.util.Locale
 
-                  <TextView
-                      android:id="@+id/tvBubble"
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:text="🌐 SubBro Active"
-                      android:textColor="#00E676"
-                      android:textSize="14sp"
-                      android:textStyle="bold" />
+          object HinglishEngine {
+              private val dictionary = mapOf(
+                  "game over" to "Khel khatam!",
+                  "you died" to "Tu mar gaya bhai!",
+                  "victory" to "Jeet gaye!",
+                  "defeat" to "Haar gaye!",
+                  "start game" to "Game shuru karo",
+                  "press any button" to "Koi bhi button dabao",
+                  "quest completed" to "Mission complete ho gaya!",
+                  "mission failed" to "Mission fail ho gaya!",
+                  "inventory is full" to "Bag full ho gaya hai",
+                  "enemy spotted" to "Dushman dikh gaya!",
+                  "help me" to "Meri madad karo!",
+                  "wait for me" to "Mera intezar karo",
+                  "let's go" to "Chalo chalte hain!",
+                  "are you ready" to "Taiyyar ho?",
+                  "i don't know" to "Mujhe nahi pata",
+                  "what are you doing" to "Tu kya kar raha hai?",
+                  "who are you" to "Tum kaun ho?",
+                  "warning" to "Savdhan raho",
+                  "danger" to "Khatra hai",
+                  "attack" to "Hamla karo!",
+                  "defend" to "Bacho!",
+                  "run away" to "Bhaago yahan se!",
+                  "yes" to "Haan",
+                  "no" to "Nahi",
+                  "ok" to "Theek hai",
+                  "loading" to "Load ho raha hai..."
+              )
 
-                  <TextView
-                      android:id="@+id/btnCloseBubble"
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:layout_marginStart="14dp"
-                      android:text="✕"
-                      android:textColor="#FF5252"
-                      android:textSize="16sp"
-                      android:textStyle="bold" />
-              </LinearLayout>
-          </FrameLayout>
+              fun toHinglish(rawText: String): String {
+                  val clean = rawText.trim()
+                  if (clean.isEmpty()) return "Screen par koi text nahi mila!"
+                  
+                  val lower = clean.lowercase(Locale.ROOT)
+                  for ((key, value) in dictionary) {
+                      if (lower.contains(key)) {
+                          return value
+                      }
+                  }
+
+                  // Smart general word-by-word replacement fallback
+                  var translated = clean
+                  val wordMap = mapOf(
+                      "the" to "",
+                      "is" to "hai",
+                      "are" to "hain",
+                      "you" to "tum",
+                      "i" to "main",
+                      "we" to "hum",
+                      "this" to "yeh",
+                      "that" to "woh",
+                      "kill" to "khatam karo",
+                      "find" to "dhundo",
+                      "door" to "darwaza",
+                      "open" to "kholo",
+                      "locked" to "band hai",
+                      "secret" to "chupa hua"
+                  )
+                  for ((eng, hin) in wordMap) {
+                      val regex = ("\\b(?i)" + eng + "\\b").toRegex()
+                      translated = translated.replace(regex, hin)
+                  }
+                  return if (translated == clean) "Original: $clean" else translated.trim()
+              }
+          }
           EOF
 
           cat << 'EOF' > app/src/main/java/com/subbro/translator/MainActivity.kt
           package com.subbro.translator
 
+          import android.app.Activity
+          import android.content.Context
           import android.content.Intent
+          import android.media.projection.MediaProjectionManager
           import android.net.Uri
           import android.os.Build
           import android.os.Bundle
@@ -213,16 +335,20 @@ jobs:
           import androidx.appcompat.app.AppCompatActivity
 
           class MainActivity : AppCompatActivity() {
-              private val OVERLAY_PERMISSION_REQ_CODE = 1234
+              private val OVERLAY_REQ_CODE = 2001
+              private val PROJECTION_REQ_CODE = 2002
+              private lateinit var projectionManager: MediaProjectionManager
 
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
 
-                  val btnStart = findViewById<Button>(R.id.btnStartOverlay)
+                  projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+
+                  val btnStart = findViewById<Button>(R.id.btnStartEngine)
                   btnStart.setOnClickListener {
                       if (checkOverlayPermission()) {
-                          startFloatingService()
+                          requestScreenCapture()
                       } else {
                           requestOverlayPermission()
                       }
@@ -232,9 +358,7 @@ jobs:
               private fun checkOverlayPermission(): Boolean {
                   return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                       Settings.canDrawOverlays(this)
-                  } else {
-                      true
-                  }
+                  } else true
               }
 
               private fun requestOverlayPermission() {
@@ -243,24 +367,40 @@ jobs:
                           Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                           Uri.parse("package:$packageName")
                       )
-                      startActivityForResult(intent, OVERLAY_PERMISSION_REQ_CODE)
+                      startActivityForResult(intent, OVERLAY_REQ_CODE)
                   }
               }
 
-              private fun startFloatingService() {
-                  val intent = Intent(this, FloatingService::class.java)
-                  startService(intent)
-                  Toast.makeText(this, "SubBro Floating Icon Started!", Toast.LENGTH_SHORT).show()
-                  finish()
+              private fun requestScreenCapture() {
+                  startActivityForResult(
+                      projectionManager.createScreenCaptureIntent(),
+                      PROJECTION_REQ_CODE
+                  )
               }
 
               override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
                   super.onActivityResult(requestCode, resultCode, data)
-                  if (requestCode == OVERLAY_PERMISSION_REQ_CODE) {
+                  if (requestCode == OVERLAY_REQ_CODE) {
                       if (checkOverlayPermission()) {
-                          startFloatingService()
+                          requestScreenCapture()
                       } else {
-                          Toast.makeText(this, "Permission zaroori hai screen par dikhane ke liye", Toast.LENGTH_SHORT).show()
+                          Toast.makeText(this, "Overlay permission zaroori hai!", Toast.LENGTH_SHORT).show()
+                      }
+                  } else if (requestCode == PROJECTION_REQ_CODE) {
+                      if (resultCode == Activity.RESULT_OK && data != null) {
+                          val serviceIntent = Intent(this, FloatingService::class.java).apply {
+                              putExtra("RESULT_CODE", resultCode)
+                              putExtra("DATA_INTENT", data)
+                          }
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              startForegroundService(serviceIntent)
+                          } else {
+                              startService(serviceIntent)
+                          }
+                          Toast.makeText(this, "SubBro Active! Bubble tap karo translate karne ke liye.", Toast.LENGTH_LONG).show()
+                          finish()
+                      } else {
+                          Toast.makeText(this, "Screen capture permission zaroori hai!", Toast.LENGTH_SHORT).show()
                       }
                   }
               }
@@ -270,28 +410,99 @@ jobs:
           cat << 'EOF' > app/src/main/java/com/subbro/translator/FloatingService.kt
           package com.subbro.translator
 
+          import android.app.Notification
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
           import android.app.Service
           import android.content.Context
           import android.content.Intent
+          import android.graphics.Bitmap
           import android.graphics.PixelFormat
+          import android.hardware.display.DisplayManager
+          import android.hardware.display.VirtualDisplay
+          import android.media.ImageReader
+          import android.media.projection.MediaProjection
+          import android.media.projection.MediaProjectionManager
           import android.os.Build
+          import android.os.Handler
           import android.os.IBinder
+          import android.os.Looper
+          import android.util.DisplayMetrics
           import android.view.Gravity
           import android.view.LayoutInflater
           import android.view.MotionEvent
           import android.view.View
           import android.view.WindowManager
           import android.widget.TextView
+          import android.widget.Toast
+          import androidx.core.app.NotificationCompat
+          import com.google.mlkit.vision.common.InputImage
+          import com.google.mlkit.vision.text.TextRecognition
+          import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
           class FloatingService : Service() {
               private var windowManager: WindowManager? = null
-              private var floatingView: View? = null
+              private var bubbleView: View? = null
+              private var subtitleView: View? = null
+              private var mediaProjection: MediaProjection? = null
+              private var virtualDisplay: VirtualDisplay? = null
+              private var imageReader: ImageReader? = null
+              private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+              private val mainHandler = Handler(Looper.getMainLooper())
 
               override fun onBind(intent: Intent?): IBinder? = null
 
-              override fun onCreate() {
-                  super.onCreate()
-                  floatingView = LayoutInflater.from(this).inflate(R.layout.layout_floating_widget, null)
+              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+                  createNotification()
+                  
+                  val resultCode = intent?.getIntExtra("RESULT_CODE", -1) ?: -1
+                  val dataIntent = intent?.getParcelableExtra<Intent>("DATA_INTENT")
+
+                  if (resultCode != -1 && dataIntent != null) {
+                      val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                      mediaProjection = projectionManager.getMediaProjection(resultCode, dataIntent)
+                      setupVirtualDisplay()
+                  }
+
+                  if (bubbleView == null) {
+                      setupFloatingBubble()
+                  }
+                  return START_NOT_STICKY
+              }
+
+              private fun createNotification() {
+                  val channelId = "subbro_service"
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val channel = NotificationChannel(channelId, "SubBro Active", NotificationManager.IMPORTANCE_LOW)
+                      val manager = getSystemService(NotificationManager::class.java)
+                      manager?.createNotificationChannel(channel)
+                  }
+                  val notification: Notification = NotificationCompat.Builder(this, channelId)
+                      .setContentTitle("SubBro Translator Running")
+                      .setContentText("Tap bubble anytime to translate screen")
+                      .setSmallIcon(android.R.drawable.ic_dialog_info)
+                      .build()
+                  startForeground(1001, notification)
+              }
+
+              private fun setupVirtualDisplay() {
+                  val metrics = resources.displayMetrics
+                  imageReader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
+                  virtualDisplay = mediaProjection?.createVirtualDisplay(
+                      "SubBroDisplay",
+                      metrics.widthPixels,
+                      metrics.heightPixels,
+                      metrics.densityDpi,
+                      DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                      imageReader?.surface,
+                      null,
+                      null
+                  )
+              }
+
+              private fun setupFloatingBubble() {
+                  windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                  bubbleView = LayoutInflater.from(this).inflate(R.layout.layout_floating_bubble, null)
 
                   val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -308,23 +519,17 @@ jobs:
                   )
 
                   params.gravity = Gravity.TOP or Gravity.START
-                  params.x = 100
-                  params.y = 200
+                  params.x = 80
+                  params.y = 300
 
-                  windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-                  windowManager?.addView(floatingView, params)
+                  windowManager?.addView(bubbleView, params)
 
-                  val btnClose = floatingView?.findViewById<TextView>(R.id.btnCloseBubble)
-                  btnClose?.setOnClickListener {
-                      stopSelf()
-                  }
-
-                  val rootFloatingView = floatingView?.findViewById<View>(R.id.root_floating_view)
-                  rootFloatingView?.setOnTouchListener(object : View.OnTouchListener {
+                  bubbleView?.setOnTouchListener(object : View.OnTouchListener {
                       private var initialX = 0
                       private var initialY = 0
                       private var initialTouchX = 0f
                       private var initialTouchY = 0f
+                      private var isClick = true
 
                       override fun onTouch(v: View?, event: MotionEvent?): Boolean {
                           when (event?.action) {
@@ -333,25 +538,117 @@ jobs:
                                   initialY = params.y
                                   initialTouchX = event.rawX
                                   initialTouchY = event.rawY
+                                  isClick = true
                                   return true
                               }
                               MotionEvent.ACTION_MOVE -> {
-                                  params.x = initialX + (event.rawX - initialTouchX).toInt()
-                                  params.y = initialY + (event.rawY - initialTouchY).toInt()
-                                  windowManager?.updateViewLayout(floatingView, params)
+                                  val diffX = (event.rawX - initialTouchX).toInt()
+                                  val diffY = (event.rawY - initialTouchY).toInt()
+                                  if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
+                                      isClick = false
+                                  }
+                                  params.x = initialX + diffX
+                                  params.y = initialY + diffY
+                                  windowManager?.updateViewLayout(bubbleView, params)
+                                  return true
+                              }
+                              MotionEvent.ACTION_UP -> {
+                                  if (isClick) {
+                                      captureAndTranslateScreen()
+                                  }
                                   return true
                               }
                           }
                           return false
                       }
                   })
+
+                  bubbleView?.setOnLongClickListener {
+                      Toast.makeText(this, "SubBro Closed", Toast.LENGTH_SHORT).show()
+                      stopSelf()
+                      true
+                  }
+              }
+
+              private fun captureAndTranslateScreen() {
+                  val image = imageReader?.acquireLatestImage()
+                  if (image == null) {
+                      showSubtitle("Screen capturing...", "Dubara tap karein")
+                      return
+                  }
+
+                  val planes = image.planes
+                  val buffer = planes[0].buffer
+                  val pixelStride = planes[0].pixelStride
+                  val rowStride = planes[0].rowStride
+                  val rowPadding = rowStride - pixelStride * image.width
+
+                  val bitmap = Bitmap.createBitmap(
+                      image.width + rowPadding / pixelStride,
+                      image.height,
+                      Bitmap.Config.ARGB_8888
+                  )
+                  bitmap.copyPixelsFromBuffer(buffer)
+                  image.close()
+
+                  val inputImage = InputImage.fromBitmap(bitmap, 0)
+                  recognizer.process(inputImage)
+                      .addOnSuccessListener { visionText ->
+                          val detected = visionText.text
+                          val translated = HinglishEngine.toHinglish(detected)
+                          showSubtitle(detected, translated)
+                      }
+                      .addOnFailureListener {
+                          showSubtitle("Error", "OCR read karne me dikkat aayi")
+                      }
+              }
+
+              private fun showSubtitle(original: String, hinglish: String) {
+                  mainHandler.post {
+                      if (subtitleView == null) {
+                          subtitleView = LayoutInflater.from(this).inflate(R.layout.layout_subtitle_card, null)
+                          val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                          } else {
+                              WindowManager.LayoutParams.TYPE_PHONE
+                          }
+                          val params = WindowManager.LayoutParams(
+                              (resources.displayMetrics.widthPixels * 0.9).toInt(),
+                              WindowManager.LayoutParams.WRAP_CONTENT,
+                              layoutType,
+                              WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                              PixelFormat.TRANSLUCENT
+                          )
+                          params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                          params.y = 120
+                          windowManager?.addView(subtitleView, params)
+
+                          subtitleView?.setOnClickListener {
+                              windowManager?.removeView(subtitleView)
+                              subtitleView = null
+                          }
+                      }
+
+                      subtitleView?.findViewById<TextView>(R.id.tvOriginalText)?.text = original.ifEmpty { "Koi text nahi mila" }
+                      subtitleView?.findViewById<TextView>(R.id.tvHinglishText)?.text = hinglish
+
+                      mainHandler.removeCallbacksAndMessages(null)
+                      mainHandler.postDelayed({
+                          if (subtitleView != null) {
+                              windowManager?.removeView(subtitleView)
+                              subtitleView = null
+                          }
+                      }, 6000)
+                  }
               }
 
               override fun onDestroy() {
                   super.onDestroy()
-                  if (floatingView != null) {
-                      windowManager?.removeView(floatingView)
-                  }
+                  if (bubbleView != null) windowManager?.removeView(bubbleView)
+                  if (subtitleView != null) windowManager?.removeView(subtitleView)
+                  virtualDisplay?.release()
+                  mediaProjection?.stop()
+                  imageReader?.close()
               }
           }
           EOF
