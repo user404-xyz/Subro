@@ -22,6 +22,11 @@ jobs:
         run: |
           mkdir -p app/src/main/res/values app/src/main/res/layout app/src/main/java/com/subbro/translator
 
+          cat << 'EOF' > gradle.properties
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          EOF
+
           cat << 'EOF' > settings.gradle
           rootProject.name = "SubBro"
           include ':app'
