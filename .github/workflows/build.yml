@@ -65,8 +65,8 @@ jobs:
                   applicationId "com.subbro.translator"
                   minSdk 26
                   targetSdk 34
-                  versionCode 5
-                  versionName "1.4"
+                  versionCode 6
+                  versionName "1.5"
               }
 
               buildTypes {
@@ -103,6 +103,11 @@ jobs:
                   android:icon="@android:drawable/sym_def_app_icon"
                   android:label="SubBro"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+
+                  <meta-data
+                      android:name="com.google.mlkit.vision.DEPENDENCIES"
+                      android:value="ocr" />
+
                   <activity
                       android:name=".MainActivity"
                       android:exported="true">
@@ -270,22 +275,20 @@ jobs:
                   "help me" to "Meri madad karo!",
                   "wait for me" to "Mera intezar karo",
                   "let's go" to "Chalo chalte hain!",
-                  "are you ready" to "Taiyyar ho?",
-                  "who are you" to "Tum kaun ho?",
-                  "what is this" to "Yeh kya hai?"
+                  "are you ready" to "Taiyyar ho?"
               )
 
               private val wordMap = mapOf(
                   "i've" to "maine",
                   "i have" to "maine",
                   "heard" to "suna",
-                  "efforts" to "mehnat",
+                  "efforts" to "koshishein",
                   "progress" to "tarakki",
                   "castle" to "mahal",
                   "towards" to "ki taraf",
                   "you've" to "tumne",
                   "you have" to "tumne",
-                  "made" to "kiya hai",
+                  "made" to "kiya",
                   "lot of" to "bohot saara",
                   "about" to "ke baare me",
                   "your" to "tumhari",
@@ -299,16 +302,12 @@ jobs:
                   "locked" to "band hai",
                   "open" to "khula",
                   "sword" to "talwar",
-                  "shield" to "dhaal",
-                  "talk" to "baat karo",
-                  "king" to "raja",
-                  "village" to "gaon",
-                  "item" to "cheez"
+                  "talk" to "baat karo"
               )
 
               fun toHinglish(rawText: String): String {
                   val clean = rawText.trim()
-                  if (clean.isEmpty()) return "Screen par koi text nahi mila!"
+                  if (clean.isEmpty()) return "Screen par koi dialogue nahi mila!"
 
                   val lower = clean.lowercase(Locale.ROOT)
                   for ((phrase, translation) in dialogReplacements) {
@@ -413,7 +412,7 @@ jobs:
                           Toast.makeText(this, "SubBro Active!", Toast.LENGTH_SHORT).show()
                           moveTaskToBack(true)
                       } else {
-                          Toast.makeText(this, "Screen capture permission zaroori hai!", Toast.LENGTH_SHORT).show()
+                          Toast.makeText(this, "Screen capture allow karna zaroori hai!", Toast.LENGTH_SHORT).show()
                       }
                   }
               }
@@ -457,13 +456,17 @@ jobs:
           class FloatingService : Service() {
               private lateinit var windowManager: WindowManager
               private var bubbleView: View? = null
+              private var tvBubbleIcon: TextView? = null
               private var subtitleView: View? = null
               private var mediaProjection: MediaProjection? = null
               private var virtualDisplay: VirtualDisplay? = null
               private var imageReader: ImageReader? = null
               private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
               private val mainHandler = Handler(Looper.getMainLooper())
+              
               private var isProcessing = false
+              private var currentWidth = 0
+              private var currentHeight = 0
 
               override fun onBind(intent: Intent?): IBinder? = null
 
@@ -483,13 +486,12 @@ jobs:
                       try {
                           val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                           mediaProjection = projectionManager.getMediaProjection(resultCode, dataIntent)
-                          
                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                               mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, mainHandler)
                           }
-                          initVirtualDisplay()
+                          syncDisplayMetrics()
                       } catch (e: Exception) {
-                          Toast.makeText(this, "Capture setup error: ${e.message}", Toast.LENGTH_SHORT).show()
+                          Toast.makeText(this, "Projection error: ${e.message}", Toast.LENGTH_SHORT).show()
                       }
                   }
                   return START_NOT_STICKY
@@ -515,30 +517,39 @@ jobs:
                   }
               }
 
-              private fun initVirtualDisplay() {
+              private fun syncDisplayMetrics() {
                   val metrics = DisplayMetrics()
                   windowManager.defaultDisplay.getRealMetrics(metrics)
 
-                  val width = if (metrics.widthPixels > 0) metrics.widthPixels else 1080
-                  val height = if (metrics.heightPixels > 0) metrics.heightPixels else 2400
+                  val w = if (metrics.widthPixels > 0) metrics.widthPixels else 1080
+                  val h = if (metrics.heightPixels > 0) metrics.heightPixels else 2400
 
-                  imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3)
-                  virtualDisplay = mediaProjection?.createVirtualDisplay(
-                      "SubBroDisplay",
-                      width,
-                      height,
-                      metrics.densityDpi,
-                      DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                      imageReader?.surface,
-                      null,
-                      mainHandler
-                  )
+                  if (imageReader == null || currentWidth != w || currentHeight != h) {
+                      currentWidth = w
+                      currentHeight = h
+
+                      virtualDisplay?.release()
+                      imageReader?.close()
+
+                      imageReader = ImageReader.newInstance(currentWidth, currentHeight, PixelFormat.RGBA_8888, 2)
+                      virtualDisplay = mediaProjection?.createVirtualDisplay(
+                          "SubBroDisplay",
+                          currentWidth,
+                          currentHeight,
+                          metrics.densityDpi,
+                          DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                          imageReader?.surface,
+                          null,
+                          mainHandler
+                      )
+                  }
               }
 
               private fun setupFloatingBubble() {
                   if (bubbleView != null) return
 
                   bubbleView = LayoutInflater.from(this).inflate(R.layout.layout_floating_bubble, null)
+                  tvBubbleIcon = bubbleView?.findViewById(R.id.tvBubbleIcon)
 
                   val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -580,7 +591,7 @@ jobs:
                               MotionEvent.ACTION_MOVE -> {
                                   val diffX = (event.rawX - initialTouchX).toInt()
                                   val diffY = (event.rawY - initialTouchY).toInt()
-                                  if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
+                                  if (Math.abs(diffX) > 12 || Math.abs(diffY) > 12) {
                                       isClick = false
                                   }
                                   params.x = initialX + diffX
@@ -590,7 +601,7 @@ jobs:
                               }
                               MotionEvent.ACTION_UP -> {
                                   if (isClick) {
-                                      captureScreenAndTranslate()
+                                      startScreenScan()
                                   }
                                   return true
                               }
@@ -606,49 +617,77 @@ jobs:
                   }
               }
 
-              private fun captureScreenAndTranslate() {
+              private fun startScreenScan() {
                   if (isProcessing) return
                   isProcessing = true
-                  showSubtitle("Scanning...", "Translating screen...")
+                  tvBubbleIcon?.text = "⏳"
 
-                  var image = imageReader?.acquireLatestImage()
-                  if (image == null) {
-                      mainHandler.postDelayed({
-                          val retryImage = imageReader?.acquireLatestImage()
-                          if (retryImage != null) {
-                              processImage(retryImage)
+                  // 4 Second Safety Watchdog: Bubble kabhi lock nahi hoga
+                  mainHandler.postDelayed({
+                      if (isProcessing) {
+                          isProcessing = false
+                          tvBubbleIcon?.text = "🌐"
+                      }
+                  }, 4000)
+
+                  syncDisplayMetrics()
+
+                  var captured = false
+                  imageReader?.setOnImageAvailableListener({ reader ->
+                      if (!captured) {
+                          val img = reader.acquireLatestImage()
+                          if (img != null) {
+                              captured = true
+                              imageReader?.setOnImageAvailableListener(null, null)
+                              processCapturedFrame(img)
+                          }
+                      }
+                  }, mainHandler)
+
+                  // Fallback: Agar listener delay kare toh acquireLatestImage check karo
+                  mainHandler.postDelayed({
+                      if (!captured) {
+                          val fallbackImg = imageReader?.acquireLatestImage()
+                          if (fallbackImg != null) {
+                              captured = true
+                              imageReader?.setOnImageAvailableListener(null, null)
+                              processCapturedFrame(fallbackImg)
                           } else {
                               isProcessing = false
+                              tvBubbleIcon?.text = "🌐"
                               showSubtitle("Notice", "Ek second rukk kar dubara tap karein")
                           }
-                      }, 200)
-                      return
-                  }
-                  processImage(image)
+                      }
+                  }, 300)
               }
 
-              private fun processImage(image: android.media.Image) {
+              private fun processCapturedFrame(image: android.media.Image) {
                   try {
-                      val planes = image.planes
-                      val buffer = planes[0].buffer
-                      val pixelStride = planes[0].pixelStride
-                      val rowStride = planes[0].rowStride
+                      val plane = image.planes[0]
+                      val buffer = plane.buffer
+                      buffer.rewind()
+
+                      val pixelStride = plane.pixelStride
+                      val rowStride = plane.rowStride
                       val rowPadding = rowStride - pixelStride * image.width
 
-                      val rawBitmap = Bitmap.createBitmap(
-                          image.width + rowPadding / pixelStride,
-                          image.height,
-                          Bitmap.Config.ARGB_8888
-                      )
+                      val bitmapWidth = image.width + (rowPadding / pixelStride)
+                      val rawBitmap = Bitmap.createBitmap(bitmapWidth, image.height, Bitmap.Config.ARGB_8888)
                       rawBitmap.copyPixelsFromBuffer(buffer)
                       image.close()
 
-                      val cleanBitmap = Bitmap.createBitmap(rawBitmap, 0, 0, image.width, image.height)
-                      val inputImage = InputImage.fromBitmap(cleanBitmap, 0)
+                      val cleanBitmap = if (rowPadding > 0) {
+                          Bitmap.createBitmap(rawBitmap, 0, 0, image.width, image.height)
+                      } else {
+                          rawBitmap
+                      }
 
+                      val inputImage = InputImage.fromBitmap(cleanBitmap, 0)
                       recognizer.process(inputImage)
                           .addOnSuccessListener { visionText ->
                               isProcessing = false
+                              tvBubbleIcon?.text = "🌐"
+
                               val text = visionText.text.trim()
                               if (text.isEmpty()) {
                                   showSubtitle("No Text", "Screen par koi text nahi mila")
@@ -657,14 +696,16 @@ jobs:
                                   showSubtitle(text, hinglish)
                               }
                           }
-                          .addOnFailureListener {
+                          .addOnFailureListener { e ->
                               isProcessing = false
-                              showSubtitle("OCR Error", "Text decode nahi ho paya")
+                              tvBubbleIcon?.text = "🌐"
+                              showSubtitle("OCR Wait", "Model ready ho raha hai, 5s baad tap karein")
                           }
-                  } catch (e: Exception) {
+                  } catch (t: Throwable) {
                       isProcessing = false
-                      image.close()
-                      showSubtitle("Error", "Frame process error")
+                      tvBubbleIcon?.text = "🌐"
+                      try { image.close() } catch (e: Exception) {}
+                      showSubtitle("Notice", "Screen tap dobara karein")
                   }
               }
 
@@ -700,7 +741,7 @@ jobs:
                       mainHandler.removeCallbacksAndMessages(null)
                       mainHandler.postDelayed({
                           if (subtitleView != null) {
-                              windowManager.removeView(subtitleView)
+                              windowManager?.removeView(subtitleView)
                               subtitleView = null
                           }
                       }, 7000)
