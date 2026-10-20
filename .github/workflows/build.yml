@@ -20,7 +20,7 @@ jobs:
 
       - name: Generate SubBro Android Project
         run: |
-          mkdir -p app/src/main/res/values app/src/main/res/layout app/src/main/java/com/subbro/translator
+          mkdir -p app/src/main/res/values app/src/main/res/layout app/src/main/res/drawable app/src/main/java/com/subbro/translator
 
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
@@ -65,8 +65,8 @@ jobs:
                   applicationId "com.subbro.translator"
                   minSdk 26
                   targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
+                  versionCode 2
+                  versionName "1.1"
               }
 
               buildTypes {
@@ -94,6 +94,7 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
               
               <application
                   android:allowBackup="true"
@@ -108,6 +109,11 @@ jobs:
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
                   </activity>
+                  <service
+                      android:name=".FloatingService"
+                      android:enabled="true"
+                      android:exported="false"
+                      android:foregroundServiceType="specialUse" />
               </application>
           </manifest>
           EOF
@@ -125,52 +131,226 @@ jobs:
               android:layout_height="match_parent"
               android:orientation="vertical"
               android:gravity="center"
-              android:padding="20dp"
-              android:background="#121212">
+              android:padding="24dp"
+              android:background="#0F0F14">
 
               <TextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:text="SubBro Translator"
                   android:textColor="#FFFFFF"
-                  android:textSize="26sp"
+                  android:textSize="28sp"
                   android:textStyle="bold" />
 
               <TextView
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:layout_marginTop="12dp"
-                  android:text="Live Offline Hinglish Screen &amp; Game Translator"
-                  android:textColor="#BBBBBB"
+                  android:layout_marginTop="10dp"
+                  android:text="Live Screen &amp; Game Hinglish Translator"
+                  android:textColor="#9E9E9E"
                   android:textSize="14sp" />
 
               <Button
                   android:id="@+id/btnStartOverlay"
                   android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:layout_marginTop="32dp"
+                  android:layout_height="56dp"
+                  android:layout_marginTop="40dp"
                   android:text="Start Floating Translator"
-                  android:backgroundTint="#6200EE"
-                  android:textColor="#FFFFFF" />
+                  android:backgroundTint="#7C4DFF"
+                  android:textColor="#FFFFFF"
+                  android:textSize="16sp"
+                  android:textStyle="bold" />
           </LinearLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/layout_floating_widget.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/root_floating_view"
+              android:layout_width="wrap_content"
+              android:layout_height="wrap_content">
+
+              <LinearLayout
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:background="#E61A1A24"
+                  android:padding="10dp"
+                  android:gravity="center"
+                  android:orientation="horizontal">
+
+                  <TextView
+                      android:id="@+id/tvBubble"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="🌐 SubBro Active"
+                      android:textColor="#00E676"
+                      android:textSize="14sp"
+                      android:textStyle="bold" />
+
+                  <TextView
+                      android:id="@+id/btnCloseBubble"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_marginStart="14dp"
+                      android:text="✕"
+                      android:textColor="#FF5252"
+                      android:textSize="16sp"
+                      android:textStyle="bold" />
+              </LinearLayout>
+          </FrameLayout>
           EOF
 
           cat << 'EOF' > app/src/main/java/com/subbro/translator/MainActivity.kt
           package com.subbro.translator
 
+          import android.content.Intent
+          import android.net.Uri
+          import android.os.Build
           import android.os.Bundle
+          import android.provider.Settings
           import android.widget.Button
           import android.widget.Toast
           import androidx.appcompat.app.AppCompatActivity
 
           class MainActivity : AppCompatActivity() {
+              private val OVERLAY_PERMISSION_REQ_CODE = 1234
+
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   setContentView(R.layout.activity_main)
 
                   val btnStart = findViewById<Button>(R.id.btnStartOverlay)
                   btnStart.setOnClickListener {
-                      Toast.makeText(this, "SubBro Engine Initializing...", Toast.LENGTH_SHORT).show()
+                      if (checkOverlayPermission()) {
+                          startFloatingService()
+                      } else {
+                          requestOverlayPermission()
+                      }
+                  }
+              }
+
+              private fun checkOverlayPermission(): Boolean {
+                  return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      Settings.canDrawOverlays(this)
+                  } else {
+                      true
+                  }
+              }
+
+              private fun requestOverlayPermission() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      val intent = Intent(
+                          Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                          Uri.parse("package:$packageName")
+                      )
+                      startActivityForResult(intent, OVERLAY_PERMISSION_REQ_CODE)
+                  }
+              }
+
+              private fun startFloatingService() {
+                  val intent = Intent(this, FloatingService::class.java)
+                  startService(intent)
+                  Toast.makeText(this, "SubBro Floating Icon Started!", Toast.LENGTH_SHORT).show()
+                  finish()
+              }
+
+              override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+                  super.onActivityResult(requestCode, resultCode, data)
+                  if (requestCode == OVERLAY_PERMISSION_REQ_CODE) {
+                      if (checkOverlayPermission()) {
+                          startFloatingService()
+                      } else {
+                          Toast.makeText(this, "Permission zaroori hai screen par dikhane ke liye", Toast.LENGTH_SHORT).show()
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/subbro/translator/FloatingService.kt
+          package com.subbro.translator
+
+          import android.app.Service
+          import android.content.Context
+          import android.content.Intent
+          import android.graphics.PixelFormat
+          import android.os.Build
+          import android.os.IBinder
+          import android.view.Gravity
+          import android.view.LayoutInflater
+          import android.view.MotionEvent
+          import android.view.View
+          import android.view.WindowManager
+          import android.widget.TextView
+
+          class FloatingService : Service() {
+              private var windowManager: WindowManager? = null
+              private var floatingView: View? = null
+
+              override fun onBind(intent: Intent?): IBinder? = null
+
+              override fun onCreate() {
+                  super.onCreate()
+                  floatingView = LayoutInflater.from(this).inflate(R.layout.layout_floating_widget, null)
+
+                  val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                  } else {
+                      WindowManager.LayoutParams.TYPE_PHONE
+                  }
+
+                  val params = WindowManager.LayoutParams(
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      layoutType,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                      PixelFormat.TRANSLUCENT
+                  )
+
+                  params.gravity = Gravity.TOP or Gravity.START
+                  params.x = 100
+                  params.y = 200
+
+                  windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                  windowManager?.addView(floatingView, params)
+
+                  val btnClose = floatingView?.findViewById<TextView>(R.id.btnCloseBubble)
+                  btnClose?.setOnClickListener {
+                      stopSelf()
+                  }
+
+                  val rootFloatingView = floatingView?.findViewById<View>(R.id.root_floating_view)
+                  rootFloatingView?.setOnTouchListener(object : View.OnTouchListener {
+                      private var initialX = 0
+                      private var initialY = 0
+                      private var initialTouchX = 0f
+                      private var initialTouchY = 0f
+
+                      override fun onTouch(v: View?, event: MotionEvent?): Boolean {
+                          when (event?.action) {
+                              MotionEvent.ACTION_DOWN -> {
+                                  initialX = params.x
+                                  initialY = params.y
+                                  initialTouchX = event.rawX
+                                  initialTouchY = event.rawY
+                                  return true
+                              }
+                              MotionEvent.ACTION_MOVE -> {
+                                  params.x = initialX + (event.rawX - initialTouchX).toInt()
+                                  params.y = initialY + (event.rawY - initialTouchY).toInt()
+                                  windowManager?.updateViewLayout(floatingView, params)
+                                  return true
+                              }
+                          }
+                          return false
+                      }
+                  })
+              }
+
+              override fun onDestroy() {
+                  super.onDestroy()
+                  if (floatingView != null) {
+                      windowManager?.removeView(floatingView)
                   }
               }
           }
