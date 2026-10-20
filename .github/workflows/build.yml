@@ -65,8 +65,8 @@ jobs:
                   applicationId "com.subbro.translator"
                   minSdk 26
                   targetSdk 34
-                  versionCode 4
-                  versionName "1.3"
+                  versionCode 5
+                  versionName "1.4"
               }
 
               buildTypes {
@@ -96,6 +96,7 @@ jobs:
               <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
               
               <application
                   android:allowBackup="true"
@@ -142,8 +143,8 @@ jobs:
           cat << 'EOF' > app/src/main/res/drawable/bg_subtitle_card.xml
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#F011111A" />
-              <corners android:radius="16dp" />
+              <solid android:color="#F211111A" />
+              <corners android:radius="14dp" />
               <stroke
                   android:width="1.5dp"
                   android:color="#7C4DFF" />
@@ -172,7 +173,7 @@ jobs:
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:layout_marginTop="8dp"
-                  android:text="Offline Screen &amp; Game Hinglish Translator"
+                  android:text="Live Screen &amp; Game Hinglish Translator"
                   android:textColor="#8F8FA3"
                   android:textSize="14sp" />
 
@@ -231,7 +232,7 @@ jobs:
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:text="Original Text..."
-                  android:textColor="#9E9EAF"
+                  android:textColor="#A0A0B2"
                   android:textSize="13sp" />
 
               <TextView
@@ -239,7 +240,7 @@ jobs:
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:layout_marginTop="6dp"
-                  android:text="Hinglish Translation..."
+                  android:text="Hinglish..."
                   android:textColor="#00E676"
                   android:textSize="16sp"
                   android:textStyle="bold" />
@@ -253,8 +254,8 @@ jobs:
 
           object HinglishEngine {
               private val dialogReplacements = listOf(
-                  "i've heard about your efforts" to "Maine tumhari mehnat ke baare me suna hai!",
-                  "i have heard about your efforts" to "Maine tumhari mehnat ke baare me suna hai!",
+                  "i've heard about your efforts" to "Maine tumhari koshishon ke baare me suna hai!",
+                  "i have heard about your efforts" to "Maine tumhari koshishon ke baare me suna hai!",
                   "made a lot of progress towards the castle" to "Mahal ki taraf bohot aage badh chuke ho!",
                   "towards the castle" to "Mahal ki taraf",
                   "game over" to "Khel khatam!",
@@ -269,7 +270,9 @@ jobs:
                   "help me" to "Meri madad karo!",
                   "wait for me" to "Mera intezar karo",
                   "let's go" to "Chalo chalte hain!",
-                  "are you ready" to "Taiyyar ho?"
+                  "are you ready" to "Taiyyar ho?",
+                  "who are you" to "Tum kaun ho?",
+                  "what is this" to "Yeh kya hai?"
               )
 
               private val wordMap = mapOf(
@@ -299,7 +302,8 @@ jobs:
                   "shield" to "dhaal",
                   "talk" to "baat karo",
                   "king" to "raja",
-                  "village" to "gaon"
+                  "village" to "gaon",
+                  "item" to "cheez"
               )
 
               fun toHinglish(rawText: String): String {
@@ -307,7 +311,6 @@ jobs:
                   if (clean.isEmpty()) return "Screen par koi text nahi mila!"
 
                   val lower = clean.lowercase(Locale.ROOT)
-
                   for ((phrase, translation) in dialogReplacements) {
                       if (lower.contains(phrase)) {
                           return translation
@@ -321,7 +324,7 @@ jobs:
                   }
 
                   return if (translated.equals(clean, ignoreCase = true)) {
-                      "Detected: $clean"
+                      clean
                   } else {
                       translated.trim()
                   }
@@ -407,7 +410,8 @@ jobs:
                           } else {
                               startService(serviceIntent)
                           }
-                          finish()
+                          Toast.makeText(this, "SubBro Active!", Toast.LENGTH_SHORT).show()
+                          moveTaskToBack(true)
                       } else {
                           Toast.makeText(this, "Screen capture permission zaroori hai!", Toast.LENGTH_SHORT).show()
                       }
@@ -435,7 +439,6 @@ jobs:
           import android.media.projection.MediaProjectionManager
           import android.os.Build
           import android.os.Handler
-          import android.os.HandlerThread
           import android.os.IBinder
           import android.os.Looper
           import android.util.DisplayMetrics
@@ -452,7 +455,7 @@ jobs:
           import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
           class FloatingService : Service() {
-              private var windowManager: WindowManager? = null
+              private lateinit var windowManager: WindowManager
               private var bubbleView: View? = null
               private var subtitleView: View? = null
               private var mediaProjection: MediaProjection? = null
@@ -460,17 +463,14 @@ jobs:
               private var imageReader: ImageReader? = null
               private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
               private val mainHandler = Handler(Looper.getMainLooper())
-              private lateinit var backgroundThread: HandlerThread
-              private lateinit var backgroundHandler: Handler
               private var isProcessing = false
 
               override fun onBind(intent: Intent?): IBinder? = null
 
               override fun onCreate() {
                   super.onCreate()
-                  backgroundThread = HandlerThread("SubBroCaptureThread")
-                  backgroundThread.start()
-                  backgroundHandler = Handler(backgroundThread.looper)
+                  windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                  setupFloatingBubble()
               }
 
               override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -480,23 +480,23 @@ jobs:
                   val dataIntent = intent?.getParcelableExtra<Intent>("DATA_INTENT")
 
                   if (resultCode != -1 && dataIntent != null) {
-                      val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                      mediaProjection = projectionManager.getMediaProjection(resultCode, dataIntent)
-                      
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                          mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, mainHandler)
+                      try {
+                          val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                          mediaProjection = projectionManager.getMediaProjection(resultCode, dataIntent)
+                          
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                              mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, mainHandler)
+                          }
+                          initVirtualDisplay()
+                      } catch (e: Exception) {
+                          Toast.makeText(this, "Capture setup error: ${e.message}", Toast.LENGTH_SHORT).show()
                       }
-                      setupVirtualDisplay()
-                  }
-
-                  if (bubbleView == null) {
-                      setupFloatingBubble()
                   }
                   return START_NOT_STICKY
               }
 
               private fun createNotification() {
-                  val channelId = "subbro_service"
+                  val channelId = "subbro_channel"
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       val channel = NotificationChannel(channelId, "SubBro Active", NotificationManager.IMPORTANCE_LOW)
                       val manager = getSystemService(NotificationManager::class.java)
@@ -504,7 +504,7 @@ jobs:
                   }
                   val notification: Notification = NotificationCompat.Builder(this, channelId)
                       .setContentTitle("SubBro Translator Active")
-                      .setContentText("Tap bubble to translate game screen")
+                      .setContentText("Tap bubble to translate screen")
                       .setSmallIcon(android.R.drawable.ic_dialog_info)
                       .build()
 
@@ -515,28 +515,29 @@ jobs:
                   }
               }
 
-              private fun setupVirtualDisplay() {
-                  windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+              private fun initVirtualDisplay() {
                   val metrics = DisplayMetrics()
-                  windowManager?.defaultDisplay?.getRealMetrics(metrics)
+                  windowManager.defaultDisplay.getRealMetrics(metrics)
 
-                  virtualDisplay?.release()
-                  imageReader?.close()
+                  val width = if (metrics.widthPixels > 0) metrics.widthPixels else 1080
+                  val height = if (metrics.heightPixels > 0) metrics.heightPixels else 2400
 
-                  imageReader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
+                  imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3)
                   virtualDisplay = mediaProjection?.createVirtualDisplay(
                       "SubBroDisplay",
-                      metrics.widthPixels,
-                      metrics.heightPixels,
+                      width,
+                      height,
                       metrics.densityDpi,
                       DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                       imageReader?.surface,
                       null,
-                      backgroundHandler
+                      mainHandler
                   )
               }
 
               private fun setupFloatingBubble() {
+                  if (bubbleView != null) return
+
                   bubbleView = LayoutInflater.from(this).inflate(R.layout.layout_floating_bubble, null)
 
                   val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -555,9 +556,9 @@ jobs:
 
                   params.gravity = Gravity.TOP or Gravity.START
                   params.x = 60
-                  params.y = 200
+                  params.y = 260
 
-                  windowManager?.addView(bubbleView, params)
+                  windowManager.addView(bubbleView, params)
 
                   bubbleView?.setOnTouchListener(object : View.OnTouchListener {
                       private var initialX = 0
@@ -579,17 +580,17 @@ jobs:
                               MotionEvent.ACTION_MOVE -> {
                                   val diffX = (event.rawX - initialTouchX).toInt()
                                   val diffY = (event.rawY - initialTouchY).toInt()
-                                  if (Math.abs(diffX) > 12 || Math.abs(diffY) > 12) {
+                                  if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
                                       isClick = false
                                   }
                                   params.x = initialX + diffX
                                   params.y = initialY + diffY
-                                  windowManager?.updateViewLayout(bubbleView, params)
+                                  windowManager.updateViewLayout(bubbleView, params)
                                   return true
                               }
                               MotionEvent.ACTION_UP -> {
                                   if (isClick) {
-                                      triggerScreenScan()
+                                      captureScreenAndTranslate()
                                   }
                                   return true
                               }
@@ -605,35 +606,28 @@ jobs:
                   }
               }
 
-              private fun triggerScreenScan() {
+              private fun captureScreenAndTranslate() {
                   if (isProcessing) return
                   isProcessing = true
-                  showSubtitle("Scanning screen...", "Text padh raha hoon...")
+                  showSubtitle("Scanning...", "Translating screen...")
 
-                  setupVirtualDisplay()
-
-                  var captured = false
-                  imageReader?.setOnImageAvailableListener({ reader ->
-                      if (!captured) {
-                          val image = reader.acquireLatestImage()
-                          if (image != null) {
-                              captured = true
-                              imageReader?.setOnImageAvailableListener(null, null)
-                              processCapturedImage(image)
+                  var image = imageReader?.acquireLatestImage()
+                  if (image == null) {
+                      mainHandler.postDelayed({
+                          val retryImage = imageReader?.acquireLatestImage()
+                          if (retryImage != null) {
+                              processImage(retryImage)
+                          } else {
+                              isProcessing = false
+                              showSubtitle("Notice", "Ek second rukk kar dubara tap karein")
                           }
-                      }
-                  }, backgroundHandler)
-
-                  backgroundHandler.postDelayed({
-                      if (!captured) {
-                          imageReader?.setOnImageAvailableListener(null, null)
-                          isProcessing = false
-                          showSubtitle("Retry", "Dobara tap karke dekhein")
-                      }
-                  }, 1200)
+                      }, 200)
+                      return
+                  }
+                  processImage(image)
               }
 
-              private fun processCapturedImage(image: android.media.Image) {
+              private fun processImage(image: android.media.Image) {
                   try {
                       val planes = image.planes
                       val buffer = planes[0].buffer
@@ -655,22 +649,22 @@ jobs:
                       recognizer.process(inputImage)
                           .addOnSuccessListener { visionText ->
                               isProcessing = false
-                              val detected = visionText.text.trim()
-                              if (detected.isEmpty()) {
-                                  showSubtitle("No Text Found", "Dialogue screen par nahi mila")
+                              val text = visionText.text.trim()
+                              if (text.isEmpty()) {
+                                  showSubtitle("No Text", "Screen par koi text nahi mila")
                               } else {
-                                  val hinglish = HinglishEngine.toHinglish(detected)
-                                  showSubtitle(detected, hinglish)
+                                  val hinglish = HinglishEngine.toHinglish(text)
+                                  showSubtitle(text, hinglish)
                               }
                           }
                           .addOnFailureListener {
                               isProcessing = false
-                              showSubtitle("Error", "Text pehchanne me error aaya")
+                              showSubtitle("OCR Error", "Text decode nahi ho paya")
                           }
                   } catch (e: Exception) {
                       isProcessing = false
                       image.close()
-                      showSubtitle("Capture Error", "Frame process nahi ho paya")
+                      showSubtitle("Error", "Frame process error")
                   }
               }
 
@@ -684,7 +678,7 @@ jobs:
                               WindowManager.LayoutParams.TYPE_PHONE
                           }
                           val params = WindowManager.LayoutParams(
-                              (resources.displayMetrics.widthPixels * 0.92).toInt(),
+                              (resources.displayMetrics.widthPixels * 0.90).toInt(),
                               WindowManager.LayoutParams.WRAP_CONTENT,
                               layoutType,
                               WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
@@ -692,10 +686,10 @@ jobs:
                           )
                           params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                           params.y = 80
-                          windowManager?.addView(subtitleView, params)
+                          windowManager.addView(subtitleView, params)
 
                           subtitleView?.setOnClickListener {
-                              windowManager?.removeView(subtitleView)
+                              windowManager.removeView(subtitleView)
                               subtitleView = null
                           }
                       }
@@ -706,7 +700,7 @@ jobs:
                       mainHandler.removeCallbacksAndMessages(null)
                       mainHandler.postDelayed({
                           if (subtitleView != null) {
-                              windowManager?.removeView(subtitleView)
+                              windowManager.removeView(subtitleView)
                               subtitleView = null
                           }
                       }, 7000)
@@ -715,12 +709,11 @@ jobs:
 
               override fun onDestroy() {
                   super.onDestroy()
-                  if (bubbleView != null) windowManager?.removeView(bubbleView)
-                  if (subtitleView != null) windowManager?.removeView(subtitleView)
+                  if (bubbleView != null) windowManager.removeView(bubbleView)
+                  if (subtitleView != null) windowManager.removeView(subtitleView)
                   virtualDisplay?.release()
                   mediaProjection?.stop()
                   imageReader?.close()
-                  backgroundThread.quitSafely()
               }
           }
           EOF
