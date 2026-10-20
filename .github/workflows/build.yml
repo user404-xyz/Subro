@@ -65,8 +65,8 @@ jobs:
                   applicationId "com.subbro.translator"
                   minSdk 26
                   targetSdk 34
-                  versionCode 3
-                  versionName "1.2"
+                  versionCode 4
+                  versionName "1.3"
               }
 
               buildTypes {
@@ -134,16 +134,16 @@ jobs:
                   android:width="2dp"
                   android:color="#FFFFFF" />
               <size
-                  android:width="54dp"
-                  android:height="54dp" />
+                  android:width="52dp"
+                  android:height="52dp" />
           </shape>
           EOF
 
           cat << 'EOF' > app/src/main/res/drawable/bg_subtitle_card.xml
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android">
-              <solid android:color="#E60D0D14" />
-              <corners android:radius="14dp" />
+              <solid android:color="#F011111A" />
+              <corners android:radius="16dp" />
               <stroke
                   android:width="1.5dp"
                   android:color="#7C4DFF" />
@@ -172,7 +172,7 @@ jobs:
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
                   android:layout_marginTop="8dp"
-                  android:text="Offline Realtime Hinglish Translator"
+                  android:text="Offline Screen &amp; Game Hinglish Translator"
                   android:textColor="#8F8FA3"
                   android:textSize="14sp" />
 
@@ -202,8 +202,8 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:id="@+id/bubble_container"
-              android:layout_width="54dp"
-              android:layout_height="54dp"
+              android:layout_width="52dp"
+              android:layout_height="52dp"
               android:background="@drawable/bg_circle_bubble">
 
               <TextView
@@ -230,16 +230,16 @@ jobs:
                   android:id="@+id/tvOriginalText"
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
-                  android:text="Detected Text..."
+                  android:text="Original Text..."
                   android:textColor="#9E9EAF"
-                  android:textSize="12sp" />
+                  android:textSize="13sp" />
 
               <TextView
                   android:id="@+id/tvHinglishText"
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:layout_marginTop="6dp"
-                  android:text="SubBro Translating..."
+                  android:text="Hinglish Translation..."
                   android:textColor="#00E676"
                   android:textSize="16sp"
                   android:textStyle="bold" />
@@ -252,12 +252,15 @@ jobs:
           import java.util.Locale
 
           object HinglishEngine {
-              private val dictionary = mapOf(
+              private val dialogReplacements = listOf(
+                  "i've heard about your efforts" to "Maine tumhari mehnat ke baare me suna hai!",
+                  "i have heard about your efforts" to "Maine tumhari mehnat ke baare me suna hai!",
+                  "made a lot of progress towards the castle" to "Mahal ki taraf bohot aage badh chuke ho!",
+                  "towards the castle" to "Mahal ki taraf",
                   "game over" to "Khel khatam!",
                   "you died" to "Tu mar gaya bhai!",
                   "victory" to "Jeet gaye!",
                   "defeat" to "Haar gaye!",
-                  "start game" to "Game shuru karo",
                   "press any button" to "Koi bhi button dabao",
                   "quest completed" to "Mission complete ho gaya!",
                   "mission failed" to "Mission fail ho gaya!",
@@ -266,55 +269,62 @@ jobs:
                   "help me" to "Meri madad karo!",
                   "wait for me" to "Mera intezar karo",
                   "let's go" to "Chalo chalte hain!",
-                  "are you ready" to "Taiyyar ho?",
-                  "i don't know" to "Mujhe nahi pata",
-                  "what are you doing" to "Tu kya kar raha hai?",
-                  "who are you" to "Tum kaun ho?",
-                  "warning" to "Savdhan raho",
-                  "danger" to "Khatra hai",
-                  "attack" to "Hamla karo!",
-                  "defend" to "Bacho!",
-                  "run away" to "Bhaago yahan se!",
-                  "yes" to "Haan",
-                  "no" to "Nahi",
-                  "ok" to "Theek hai",
-                  "loading" to "Load ho raha hai..."
+                  "are you ready" to "Taiyyar ho?"
+              )
+
+              private val wordMap = mapOf(
+                  "i've" to "maine",
+                  "i have" to "maine",
+                  "heard" to "suna",
+                  "efforts" to "mehnat",
+                  "progress" to "tarakki",
+                  "castle" to "mahal",
+                  "towards" to "ki taraf",
+                  "you've" to "tumne",
+                  "you have" to "tumne",
+                  "made" to "kiya hai",
+                  "lot of" to "bohot saara",
+                  "about" to "ke baare me",
+                  "your" to "tumhari",
+                  "you" to "tum",
+                  "are" to "ho",
+                  "is" to "hai",
+                  "danger" to "khatra",
+                  "warning" to "savdhan",
+                  "attack" to "hamla",
+                  "door" to "darwaza",
+                  "locked" to "band hai",
+                  "open" to "khula",
+                  "sword" to "talwar",
+                  "shield" to "dhaal",
+                  "talk" to "baat karo",
+                  "king" to "raja",
+                  "village" to "gaon"
               )
 
               fun toHinglish(rawText: String): String {
                   val clean = rawText.trim()
                   if (clean.isEmpty()) return "Screen par koi text nahi mila!"
-                  
+
                   val lower = clean.lowercase(Locale.ROOT)
-                  for ((key, value) in dictionary) {
-                      if (lower.contains(key)) {
-                          return value
+
+                  for ((phrase, translation) in dialogReplacements) {
+                      if (lower.contains(phrase)) {
+                          return translation
                       }
                   }
 
-                  // Smart general word-by-word replacement fallback
                   var translated = clean
-                  val wordMap = mapOf(
-                      "the" to "",
-                      "is" to "hai",
-                      "are" to "hain",
-                      "you" to "tum",
-                      "i" to "main",
-                      "we" to "hum",
-                      "this" to "yeh",
-                      "that" to "woh",
-                      "kill" to "khatam karo",
-                      "find" to "dhundo",
-                      "door" to "darwaza",
-                      "open" to "kholo",
-                      "locked" to "band hai",
-                      "secret" to "chupa hua"
-                  )
                   for ((eng, hin) in wordMap) {
-                      val regex = ("\\b(?i)" + eng + "\\b").toRegex()
+                      val regex = ("\\b(?i)" + Regex.escape(eng) + "\\b").toRegex()
                       translated = translated.replace(regex, hin)
                   }
-                  return if (translated == clean) "Original: $clean" else translated.trim()
+
+                  return if (translated.equals(clean, ignoreCase = true)) {
+                      "Detected: $clean"
+                  } else {
+                      translated.trim()
+                  }
               }
           }
           EOF
@@ -397,7 +407,6 @@ jobs:
                           } else {
                               startService(serviceIntent)
                           }
-                          Toast.makeText(this, "SubBro Active! Bubble tap karo translate karne ke liye.", Toast.LENGTH_LONG).show()
                           finish()
                       } else {
                           Toast.makeText(this, "Screen capture permission zaroori hai!", Toast.LENGTH_SHORT).show()
@@ -416,6 +425,7 @@ jobs:
           import android.app.Service
           import android.content.Context
           import android.content.Intent
+          import android.content.pm.ServiceInfo
           import android.graphics.Bitmap
           import android.graphics.PixelFormat
           import android.hardware.display.DisplayManager
@@ -425,6 +435,7 @@ jobs:
           import android.media.projection.MediaProjectionManager
           import android.os.Build
           import android.os.Handler
+          import android.os.HandlerThread
           import android.os.IBinder
           import android.os.Looper
           import android.util.DisplayMetrics
@@ -449,18 +460,32 @@ jobs:
               private var imageReader: ImageReader? = null
               private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
               private val mainHandler = Handler(Looper.getMainLooper())
+              private lateinit var backgroundThread: HandlerThread
+              private lateinit var backgroundHandler: Handler
+              private var isProcessing = false
 
               override fun onBind(intent: Intent?): IBinder? = null
 
+              override fun onCreate() {
+                  super.onCreate()
+                  backgroundThread = HandlerThread("SubBroCaptureThread")
+                  backgroundThread.start()
+                  backgroundHandler = Handler(backgroundThread.looper)
+              }
+
               override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
                   createNotification()
-                  
+
                   val resultCode = intent?.getIntExtra("RESULT_CODE", -1) ?: -1
                   val dataIntent = intent?.getParcelableExtra<Intent>("DATA_INTENT")
 
                   if (resultCode != -1 && dataIntent != null) {
                       val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                       mediaProjection = projectionManager.getMediaProjection(resultCode, dataIntent)
+                      
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                          mediaProjection?.registerCallback(object : MediaProjection.Callback() {}, mainHandler)
+                      }
                       setupVirtualDisplay()
                   }
 
@@ -478,15 +503,26 @@ jobs:
                       manager?.createNotificationChannel(channel)
                   }
                   val notification: Notification = NotificationCompat.Builder(this, channelId)
-                      .setContentTitle("SubBro Translator Running")
-                      .setContentText("Tap bubble anytime to translate screen")
+                      .setContentTitle("SubBro Translator Active")
+                      .setContentText("Tap bubble to translate game screen")
                       .setSmallIcon(android.R.drawable.ic_dialog_info)
                       .build()
-                  startForeground(1001, notification)
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                      startForeground(1001, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+                  } else {
+                      startForeground(1001, notification)
+                  }
               }
 
               private fun setupVirtualDisplay() {
-                  val metrics = resources.displayMetrics
+                  windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                  val metrics = DisplayMetrics()
+                  windowManager?.defaultDisplay?.getRealMetrics(metrics)
+
+                  virtualDisplay?.release()
+                  imageReader?.close()
+
                   imageReader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
                   virtualDisplay = mediaProjection?.createVirtualDisplay(
                       "SubBroDisplay",
@@ -496,12 +532,11 @@ jobs:
                       DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                       imageReader?.surface,
                       null,
-                      null
+                      backgroundHandler
                   )
               }
 
               private fun setupFloatingBubble() {
-                  windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
                   bubbleView = LayoutInflater.from(this).inflate(R.layout.layout_floating_bubble, null)
 
                   val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -519,8 +554,8 @@ jobs:
                   )
 
                   params.gravity = Gravity.TOP or Gravity.START
-                  params.x = 80
-                  params.y = 300
+                  params.x = 60
+                  params.y = 200
 
                   windowManager?.addView(bubbleView, params)
 
@@ -544,7 +579,7 @@ jobs:
                               MotionEvent.ACTION_MOVE -> {
                                   val diffX = (event.rawX - initialTouchX).toInt()
                                   val diffY = (event.rawY - initialTouchY).toInt()
-                                  if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
+                                  if (Math.abs(diffX) > 12 || Math.abs(diffY) > 12) {
                                       isClick = false
                                   }
                                   params.x = initialX + diffX
@@ -554,7 +589,7 @@ jobs:
                               }
                               MotionEvent.ACTION_UP -> {
                                   if (isClick) {
-                                      captureAndTranslateScreen()
+                                      triggerScreenScan()
                                   }
                                   return true
                               }
@@ -570,37 +605,73 @@ jobs:
                   }
               }
 
-              private fun captureAndTranslateScreen() {
-                  val image = imageReader?.acquireLatestImage()
-                  if (image == null) {
-                      showSubtitle("Screen capturing...", "Dubara tap karein")
-                      return
+              private fun triggerScreenScan() {
+                  if (isProcessing) return
+                  isProcessing = true
+                  showSubtitle("Scanning screen...", "Text padh raha hoon...")
+
+                  setupVirtualDisplay()
+
+                  var captured = false
+                  imageReader?.setOnImageAvailableListener({ reader ->
+                      if (!captured) {
+                          val image = reader.acquireLatestImage()
+                          if (image != null) {
+                              captured = true
+                              imageReader?.setOnImageAvailableListener(null, null)
+                              processCapturedImage(image)
+                          }
+                      }
+                  }, backgroundHandler)
+
+                  backgroundHandler.postDelayed({
+                      if (!captured) {
+                          imageReader?.setOnImageAvailableListener(null, null)
+                          isProcessing = false
+                          showSubtitle("Retry", "Dobara tap karke dekhein")
+                      }
+                  }, 1200)
+              }
+
+              private fun processCapturedImage(image: android.media.Image) {
+                  try {
+                      val planes = image.planes
+                      val buffer = planes[0].buffer
+                      val pixelStride = planes[0].pixelStride
+                      val rowStride = planes[0].rowStride
+                      val rowPadding = rowStride - pixelStride * image.width
+
+                      val rawBitmap = Bitmap.createBitmap(
+                          image.width + rowPadding / pixelStride,
+                          image.height,
+                          Bitmap.Config.ARGB_8888
+                      )
+                      rawBitmap.copyPixelsFromBuffer(buffer)
+                      image.close()
+
+                      val cleanBitmap = Bitmap.createBitmap(rawBitmap, 0, 0, image.width, image.height)
+                      val inputImage = InputImage.fromBitmap(cleanBitmap, 0)
+
+                      recognizer.process(inputImage)
+                          .addOnSuccessListener { visionText ->
+                              isProcessing = false
+                              val detected = visionText.text.trim()
+                              if (detected.isEmpty()) {
+                                  showSubtitle("No Text Found", "Dialogue screen par nahi mila")
+                              } else {
+                                  val hinglish = HinglishEngine.toHinglish(detected)
+                                  showSubtitle(detected, hinglish)
+                              }
+                          }
+                          .addOnFailureListener {
+                              isProcessing = false
+                              showSubtitle("Error", "Text pehchanne me error aaya")
+                          }
+                  } catch (e: Exception) {
+                      isProcessing = false
+                      image.close()
+                      showSubtitle("Capture Error", "Frame process nahi ho paya")
                   }
-
-                  val planes = image.planes
-                  val buffer = planes[0].buffer
-                  val pixelStride = planes[0].pixelStride
-                  val rowStride = planes[0].rowStride
-                  val rowPadding = rowStride - pixelStride * image.width
-
-                  val bitmap = Bitmap.createBitmap(
-                      image.width + rowPadding / pixelStride,
-                      image.height,
-                      Bitmap.Config.ARGB_8888
-                  )
-                  bitmap.copyPixelsFromBuffer(buffer)
-                  image.close()
-
-                  val inputImage = InputImage.fromBitmap(bitmap, 0)
-                  recognizer.process(inputImage)
-                      .addOnSuccessListener { visionText ->
-                          val detected = visionText.text
-                          val translated = HinglishEngine.toHinglish(detected)
-                          showSubtitle(detected, translated)
-                      }
-                      .addOnFailureListener {
-                          showSubtitle("Error", "OCR read karne me dikkat aayi")
-                      }
               }
 
               private fun showSubtitle(original: String, hinglish: String) {
@@ -613,14 +684,14 @@ jobs:
                               WindowManager.LayoutParams.TYPE_PHONE
                           }
                           val params = WindowManager.LayoutParams(
-                              (resources.displayMetrics.widthPixels * 0.9).toInt(),
+                              (resources.displayMetrics.widthPixels * 0.92).toInt(),
                               WindowManager.LayoutParams.WRAP_CONTENT,
                               layoutType,
                               WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                               PixelFormat.TRANSLUCENT
                           )
                           params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                          params.y = 120
+                          params.y = 80
                           windowManager?.addView(subtitleView, params)
 
                           subtitleView?.setOnClickListener {
@@ -629,7 +700,7 @@ jobs:
                           }
                       }
 
-                      subtitleView?.findViewById<TextView>(R.id.tvOriginalText)?.text = original.ifEmpty { "Koi text nahi mila" }
+                      subtitleView?.findViewById<TextView>(R.id.tvOriginalText)?.text = original
                       subtitleView?.findViewById<TextView>(R.id.tvHinglishText)?.text = hinglish
 
                       mainHandler.removeCallbacksAndMessages(null)
@@ -638,7 +709,7 @@ jobs:
                               windowManager?.removeView(subtitleView)
                               subtitleView = null
                           }
-                      }, 6000)
+                      }, 7000)
                   }
               }
 
@@ -649,6 +720,7 @@ jobs:
                   virtualDisplay?.release()
                   mediaProjection?.stop()
                   imageReader?.close()
+                  backgroundThread.quitSafely()
               }
           }
           EOF
